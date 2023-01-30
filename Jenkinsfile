@@ -1,11 +1,12 @@
 pipeline {
 
 	agent any
-/*
+
 	tools {
         maven "maven3"
+        jdk "Oraclejdk"
     }
-*/
+
     environment {
      registry = "shawnmanu/vproappdock"
      registeryCredentials = 'dockerhub'
