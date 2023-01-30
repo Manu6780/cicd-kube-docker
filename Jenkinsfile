@@ -1,15 +1,15 @@
 pipeline {
 
-	agent any
+    agent any
 
 	tools {
         maven "MAVEN3"
-        jdk "OracleJDK8"
+	jdk "OpenJDK"
     }
 
     environment {
-     registry = "shawnmanu/vproappdock"
-     registeryCredentials = 'dockerhub'
+        registry = "imranvisualpath/vproappdock"
+        registryCredential = 'dockerhub'
     }
 
     stages{
@@ -26,13 +26,13 @@ pipeline {
             }
         }
 
-	stage('UNIT TEST'){
+        stage('UNIT TEST'){
             steps {
                 sh 'mvn test'
             }
         }
 
-	stage('INTEGRATION TEST'){
+        stage('INTEGRATION TEST'){
             steps {
                 sh 'mvn verify -DskipUnitTests'
             }
@@ -49,15 +49,41 @@ pipeline {
             }
         }
 
+
+        stage('Building image') {
+            steps{
+              script {
+                dockerImage = docker.build registry + ":$BUILD_NUMBER"
+              }
+            }
+        }
+        
+        stage('Deploy Image') {
+          steps{
+            script {
+              docker.withRegistry( '', registryCredential ) {
+                dockerImage.push("$BUILD_NUMBER")
+                dockerImage.push('latest')
+              }
+            }
+          }
+        }
+
+        stage('Remove Unused docker image') {
+          steps{
+            sh "docker rmi $registry:$BUILD_NUMBER"
+          }
+        }
+
         stage('CODE ANALYSIS with SONARQUBE') {
 
-		  environment {
-             scannerHome = tool 'sonarscanner4'
-          }
+            environment {
+                scannerHome = tool 'mysonarscanner4'
+            }
 
-          steps {
-            withSonarQubeEnv('sonar-pro') {
-               sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
+            steps {
+                withSonarQubeEnv('sonar-pro') {
+                    sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
                    -Dsonar.projectName=vprofile-repo \
                    -Dsonar.projectVersion=1.0 \
                    -Dsonar.sources=src/ \
@@ -65,43 +91,21 @@ pipeline {
                    -Dsonar.junit.reportsPath=target/surefire-reports/ \
                    -Dsonar.jacoco.reportsPath=target/jacoco.exec \
                    -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+                }
+
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
-
-            timeout(time: 10, unit: 'MINUTES') {
-               waitForQualityGate abortPipeline: true
+        }
+        stage('Kubernetes Deploy') {
+	  agent { label 'KOPS' }
+            steps {
+                    sh "helm upgrade --install --force vproifle-stack helm/vprofilecharts --set appimage=${registry}:${BUILD_NUMBER} --namespace prod"
             }
-          }
         }
-
-        stage('Build App image') {
-        steps{
-        script{
-         dockerImage = docker.build registry + ":V$BUILD_NUMBER"
-        }
-        }
-        }
-        stage('upload image'){
-         steps{
-         script{
-         docker.withRegistry('', registryCredential){
-         dockerImage.push("V$BUILD_NUMBER")
-         dockerImage.push("latest")
-         }
-         }
-        }
-        }
-        stage('Remove Unused docker image'){
-        steps{
-        sh "docker rmi $registry:V$BUILD_NUMBER"
-          }
-
-          }
-         stage('Kuberetes Deploy'){
-         agent{label 'KOPS'}
-         steps {
-         sh "helm upgrade --install --force vprofile-stack helm/vprofilecharts --set appimage=${registry}:V${BUILD_NUMBER} --namespace prod"}
-         }
 
     }
-}
 
+
+}
