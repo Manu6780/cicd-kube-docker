@@ -3,13 +3,13 @@ pipeline {
     agent any
 
 	tools {
-        maven "MAVEN3"
-	jdk "OracleJDK8"
+        maven "maven3"
+	jdk "jdk3"
     }
 
     environment {
         registry = "shawnmanu/vproappdock"
-        registryCredential = 'dockerhub'
+        registryCredential = 'DockerHub'
     }
 
     stages{
@@ -78,11 +78,11 @@ pipeline {
         stage('CODE ANALYSIS with SONARQUBE') {
 
             environment {
-                scannerHome = tool 'mysonarscanner4'
+                scannerHome = tool 'sonartool'
             }
 
             steps {
-                withSonarQubeEnv('sonar-pro') {
+                withSonarQubeEnv('sonarscan') {
                     sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
                    -Dsonar.projectName=vprofile-repo \
                    -Dsonar.projectVersion=1.0 \
